@@ -1,4 +1,20 @@
-export default class Vector2 {
+export interface IVector2 {
+  x: number;
+  y: number;
+  clone(): Vector2;
+  set(x: number, y: number): this;
+  add(v: Vector2): this;
+  subtract(v: Vector2): this;
+  scale(s: number): this;
+  dot(v: Vector2): number;
+  length(): number;
+  normalize(): this;
+  distanceTo(v: Vector2): number;
+  copyFrom(v: Vector2): this;
+  isZero(): boolean;
+}
+
+export default class Vector2 implements IVector2 {
   constructor(public x: number = 0, public y: number = 0) { }
 
   clone(): Vector2 {
@@ -59,4 +75,3 @@ export default class Vector2 {
     return this.x === 0 && this.y === 0;
   }
 }
-
