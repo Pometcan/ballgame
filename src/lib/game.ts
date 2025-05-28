@@ -3,7 +3,6 @@ import { PlayerManager } from "./game/manager/PlayerManager";
 import { globalEventManager, EventTypes } from "./game/manager/EventManager";
 import { PlayerMovementSystem } from "./game/system/PlayerMovementSystem";
 import Vector2 from "./game/util/vector2";
-import type { Action } from 'svelte/action';
 
 Vector2
 export class game {
