@@ -1,36 +1,28 @@
 import { World } from '../core/World';
 import { System } from '../core/System';
 import { Entity } from '../core/Entity';
-import { EventManager, EventTypes, type SceneEventData, globalEventManager } from './EventManager';
-
-export interface SceneConfig {
-  name: string;
-  preload?: () => Promise<void>;
-  systems?: System[];
-  entities?: Entity[];
-  data?: any;
-}
+import { EventTypes, globalEventManager } from './EventManager';
+import { RenderSystem } from '../system/RenderSystem';
 
 export abstract class Scene {
   public readonly name: string;
   public readonly world: World;
-  public readonly eventManager: EventManager;
   public isActive: boolean = false;
   public isLoaded: boolean = false;
-  protected sceneData: any = {};
+  protected sceneData: Map<string, any> = new Map();
 
-  constructor(name: string, eventManager?: EventManager) {
+  constructor(name: string) {
     this.name = name;
     this.world = new World();
-    this.eventManager = eventManager || globalEventManager;
   }
 
+  // Sahne yaşam döngüsü metodları
   abstract preload(): Promise<void>;
   abstract create(): void;
   abstract update(deltaTime: number): void;
-  abstract render(): void;
   abstract destroy(): void;
 
+  // Sahne aktivasyonu
   async activate(): Promise<void> {
     if (this.isActive) return;
 
@@ -39,33 +31,40 @@ export abstract class Scene {
       this.isLoaded = true;
     }
 
-    this.isActive = true;
     this.create();
+    this.isActive = true;
 
-    this.eventManager.emit(EventTypes.SCENE_LOADED, {
+    globalEventManager.emit(EventTypes.SCENE_LOADED, {
       newScene: this.name
-    } as SceneEventData);
+    });
   }
 
+  // Sahne deaktivasyonu
   deactivate(): void {
     if (!this.isActive) return;
 
-    this.isActive = false;
     this.destroy();
+    this.isActive = false;
 
-    this.eventManager.emit(EventTypes.SCENE_UNLOADED, {
+    globalEventManager.emit(EventTypes.SCENE_UNLOADED, {
       newScene: this.name
-    } as SceneEventData);
+    });
   }
 
+  // Veri yönetimi
   setData(key: string, value: any): void {
-    this.sceneData[key] = value;
+    this.sceneData.set(key, value);
   }
 
   getData(key: string): any {
-    return this.sceneData[key];
+    return this.sceneData.get(key);
   }
 
+  hasData(key: string): boolean {
+    return this.sceneData.has(key);
+  }
+
+  // World yardımcı metodları
   protected addSystem(system: System): void {
     this.world.addSystem(system);
   }
@@ -82,98 +81,81 @@ export abstract class Scene {
 export class SceneManager {
   private scenes: Map<string, Scene> = new Map();
   private currentScene: Scene | null = null;
-  private transitionCallbacks: Map<string, (() => void)[]> = new Map();
-  private eventManager: EventManager;
+  private renderSystem: RenderSystem | null = null;
 
-  constructor(eventManager?: EventManager) {
-    this.eventManager = eventManager || globalEventManager;
+  // Canvas'ı ayarla ve RenderSystem'i oluştur
+  setCanvas(canvas: HTMLCanvasElement): void {
+    this.renderSystem = new RenderSystem(canvas);
   }
 
+  // Sahne ekleme/kaldırma
   addScene(scene: Scene): void {
     if (this.scenes.has(scene.name)) {
-      console.warn(`Scene ${scene.name} already exists. Replacing...`);
+      console.warn(`Scene '${scene.name}' already exists. Replacing...`);
     }
     this.scenes.set(scene.name, scene);
   }
 
-  addScenes(scenes: Scene[]): void {
-    scenes.forEach(scene => this.addScene(scene));
-  }
-
-  removeScene(sceneName: string): void {
+  removeScene(sceneName: string): boolean {
     const scene = this.scenes.get(sceneName);
-    if (scene) {
-      if (scene === this.currentScene) {
-        scene.deactivate();
-        this.currentScene = null;
-      }
-      this.scenes.delete(sceneName);
+    if (!scene) return false;
+
+    // Eğer aktif sahne siliniyorsa önce deaktive et
+    if (scene === this.currentScene) {
+      scene.deactivate();
+      this.currentScene = null;
     }
+
+    this.scenes.delete(sceneName);
+    return true;
   }
 
-  async changeScene(sceneName: string, data?: any): Promise<void> {
+  // Sahne değiştirme
+  async changeScene(sceneName: string, data?: Record<string, any>): Promise<void> {
     const newScene = this.scenes.get(sceneName);
     if (!newScene) {
-      throw new Error(`Scene ${sceneName} not found`);
+      throw new Error(`Scene '${sceneName}' not found`);
     }
 
     const previousSceneName = this.currentScene?.name;
 
-    await this.executeTransitionCallbacks(`${previousSceneName}->${sceneName}`);
-
+    // Önceki sahneyi deaktive et
     if (this.currentScene) {
       this.currentScene.deactivate();
     }
 
+    // Yeni sahneye veri aktar
     if (data) {
-      Object.keys(data).forEach(key => {
-        newScene.setData(key, data[key]);
+      Object.entries(data).forEach(([key, value]) => {
+        newScene.setData(key, value);
       });
     }
 
+    // Yeni sahneyi aktive et
     await newScene.activate();
     this.currentScene = newScene;
 
-    this.eventManager.emit(EventTypes.SCENE_CHANGE, {
+    // Event gönder
+    globalEventManager.emit(EventTypes.SCENE_CHANGE, {
       previousScene: previousSceneName,
       newScene: sceneName
-    } as SceneEventData);
+    });
   }
 
+  // Ana güncellemeler ve render
   update(deltaTime: number): void {
-    if (this.currentScene && this.currentScene.isActive) {
-      this.currentScene.world.update(deltaTime);
-      this.currentScene.update(deltaTime);
-    }
+    if (!this.currentScene?.isActive || !this.renderSystem) return;
+
+    // Sahne logic'ini güncelle
+    this.currentScene.world.update(deltaTime);
+    this.currentScene.update(deltaTime);
+
+    // Aktif sahnedeki tüm entity'leri render et
+    const entities = this.currentScene.world.getEntities();
+    this.renderSystem.update(entities, deltaTime);
   }
 
-  render(): void {
-    if (this.currentScene && this.currentScene.isActive) {
-      this.currentScene.render();
-    }
-  }
-
-  onTransition(from: string, to: string, callback: () => void): void {
-    const key = `${from}->${to}`;
-    if (!this.transitionCallbacks.has(key)) {
-      this.transitionCallbacks.set(key, []);
-    }
-    this.transitionCallbacks.get(key)!.push(callback);
-  }
-
-  private async executeTransitionCallbacks(transitionKey: string): Promise<void> {
-    const callbacks = this.transitionCallbacks.get(transitionKey);
-    if (callbacks) {
-      for (const callback of callbacks) {
-        try {
-          await callback();
-        } catch (error) {
-          console.error(`Error in transition callback for ${transitionKey}:`, error);
-        }
-      }
-    }
-  }
-
+  // Getter metodları
   getCurrentScene(): Scene | null {
     return this.currentScene;
   }
@@ -182,20 +164,12 @@ export class SceneManager {
     return this.currentScene?.name || null;
   }
 
-  hasScene(sceneName: string): boolean {
-    return this.scenes.has(sceneName);
-  }
-
   getScene(sceneName: string): Scene | undefined {
     return this.scenes.get(sceneName);
   }
 
-  getAllScenes(): Scene[] {
-    return Array.from(this.scenes.values());
-  }
-
-  getSceneNames(): string[] {
-    return Array.from(this.scenes.keys());
+  hasScene(sceneName: string): boolean {
+    return this.scenes.has(sceneName);
   }
 
   isSceneActive(sceneName: string): boolean {
@@ -207,11 +181,14 @@ export class SceneManager {
     return scene?.isLoaded || false;
   }
 
+  // Temizlik
   clear(): void {
+    // Aktif sahneyi deaktive et
     if (this.currentScene) {
       this.currentScene.deactivate();
     }
 
+    // Tüm sahneleri temizle
     this.scenes.forEach(scene => {
       if (scene.isActive) {
         scene.deactivate();
@@ -220,15 +197,16 @@ export class SceneManager {
 
     this.scenes.clear();
     this.currentScene = null;
-    this.transitionCallbacks.clear();
+
+    // RenderSystem'i temizle
+    if (this.renderSystem) {
+      this.renderSystem.destroy();
+      this.renderSystem = null;
+    }
   }
 
-  getDebugInfo(): {
-    totalScenes: number;
-    currentScene: string | null;
-    loadedScenes: string[];
-    activeScene: string | null;
-  } {
+  // Debug bilgileri
+  getDebugInfo() {
     const loadedScenes = Array.from(this.scenes.values())
       .filter(scene => scene.isLoaded)
       .map(scene => scene.name);
@@ -237,7 +215,8 @@ export class SceneManager {
       totalScenes: this.scenes.size,
       currentScene: this.getCurrentSceneName(),
       loadedScenes,
-      activeScene: this.currentScene?.isActive ? this.currentScene.name : null
+      activeScene: this.currentScene?.isActive ? this.currentScene.name : null,
+      sceneNames: Array.from(this.scenes.keys())
     };
   }
 }

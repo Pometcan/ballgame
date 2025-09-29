@@ -1,15 +1,11 @@
 <script lang="ts">
 	import { game } from '$lib/game';
 
-	function gameAction(node: HTMLCanvasElement) {
+	const gameAction = (node: HTMLCanvasElement) => {
 		const gameInstance = new game(node);
-
-		return {
-			destroy() {
-				gameInstance.destroy();
-			}
-		};
-	}
+		gameInstance.initialize();
+		return { destroy: () => gameInstance.destroy() };
+	};
 </script>
 
 <div class="absolute inset-0 m-10 flex items-center justify-center">

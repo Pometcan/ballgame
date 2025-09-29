@@ -9,7 +9,7 @@ export interface IVector2 {
   dot(v: Vector2): number;
   length(): number;
   normalize(): this;
-  distanceTo(v: Vector2): number;
+  distance(v: Vector2): number;
   copyFrom(v: Vector2): this;
   isZero(): boolean;
 }
@@ -59,7 +59,7 @@ export default class Vector2 implements IVector2 {
     return this;
   }
 
-  distanceTo(v: Vector2): number {
+  distance(v: Vector2): number {
     const dx = v.x - this.x;
     const dy = v.y - this.y;
     return Math.sqrt(dx * dx + dy * dy);
@@ -74,4 +74,5 @@ export default class Vector2 implements IVector2 {
   isZero(): boolean {
     return this.x === 0 && this.y === 0;
   }
+
 }

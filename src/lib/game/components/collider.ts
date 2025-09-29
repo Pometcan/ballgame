@@ -1,3 +1,5 @@
+import type { Component } from "../core/Component";
+
 export type ColliderType = "circle" | "rect" | "polygon";
 
 export interface CircleCollider {
@@ -11,14 +13,9 @@ export interface RectCollider {
   height: number;
 }
 
-export interface PolygonCollider {
-  type: "polygon";
-  vertices: { x: number; y: number }[];
-}
+export type ColliderShape = CircleCollider | RectCollider;
 
-export type ColliderShape = CircleCollider | RectCollider | PolygonCollider;
-
-export class Collider {
+export class Collider implements Component {
   constructor(
     public shape: ColliderShape,
     public isTrigger: boolean = false,

@@ -39,7 +39,20 @@ export class Entity {
     return Array.from(this.components.values());
   }
 
+  toJSON() {
+    return {
+      id: this.id,
+      components: Array.from(this.components.values()).map(c => {
+        if (typeof (c as any).toJSON === 'function') {
+          return (c as any).toJSON();
+        }
+        return c;
+      }),
+    };
+  }
+
   private getComponentKey<T>(cls: new (...args: any[]) => T): string {
     return cls.name;
   }
+
 }

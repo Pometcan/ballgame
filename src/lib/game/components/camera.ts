@@ -1,4 +1,6 @@
-export class CameraComponent {
+import type { Component } from "../core/Component";
+
+export class Camera implements Component {
   constructor(
     public followTarget: boolean = false,
     public offsetX: number = 0,

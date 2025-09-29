@@ -1,4 +1,6 @@
-export class TimerComponent {
+import type { Component } from "../core/Component";
+
+export class TimerComponent implements Component {
   public timers: Map<string, {
     duration: number;
     elapsed: number;

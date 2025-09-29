@@ -1,6 +1,8 @@
 import { Entity } from "./Entity";
 import { System } from "./System";
+import { TagType, Tag } from "../components/tag";
 import type { Component } from "./Component";
+
 
 export class World {
   private entities: Entity[] = [];
@@ -43,5 +45,12 @@ export class World {
 
   getEntities(): Entity[] {
     return this.entities;
+  }
+
+  getEntitiesWithTag(tagType: TagType): Entity[] {
+    return this.entities.filter(entity => {
+      const tagComponent = entity.getComponent(Tag);
+      return tagComponent && tagComponent.type === tagType;
+    });
   }
 }
